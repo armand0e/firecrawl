@@ -11,9 +11,11 @@ x-common-service: &common-service
       soft: 65535
       hard: 65535
   networks:
-    - backend
+    - firecrawl
   extra_hosts:
     - "host.docker.internal:host-gateway"
+    - "localhost:host-gateway"
+  restart: always
 
 x-common-env: &common-env
   REDIS_URL: ${REDIS_URL:-redis://redis:6379}
@@ -57,7 +59,7 @@ services:
       PROXY_PASSWORD: ${PROXY_PASSWORD}
       BLOCK_MEDIA: ${BLOCK_MEDIA}
     networks:
-      - backend
+      - firecrawl
 
   api:
     <<: *common-service
@@ -66,12 +68,13 @@ services:
       HOST: "0.0.0.0"
       PORT: ${INTERNAL_PORT:-3002}
       FLY_PROCESS_GROUP: app
-      ENV: local
+      ENV: production
     depends_on:
       - redis
       - playwright-service
     ports:
       - "${PORT:-3002}:${INTERNAL_PORT:-3002}"
+    restart: always
     command: [ "pnpm", "run", "start:production" ]
 
   worker:
@@ -80,6 +83,7 @@ services:
       <<: *common-env
       FLY_PROCESS_GROUP: worker
       ENV: local
+    restart: always
     depends_on:
       - redis
       - playwright-service
@@ -94,9 +98,27 @@ services:
     # image: valkey/valkey:alpine
 
     networks:
-      - backend
+      - firecrawl
+    restart: always
     command: redis-server --bind 0.0.0.0
 
+  firecrawl-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: firecrawl-tunnel
+    restart: always
+    command: tunnel --no-autoupdate run --token ${TOKEN}
+    environment:
+      - TZ=US/Eastern
+      - TOKEN=${TOKEN}
+    networks:
+      - firecrawl
+    depends_on:
+      - api
+      - worker
+      - playwright-service
+      - redis
+
 networks:
-  backend:
+  firecrawl:
+    name: firecrawl
     driver: bridge
