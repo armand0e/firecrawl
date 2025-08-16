@@ -60,7 +60,7 @@ services:
       BLOCK_MEDIA: ${BLOCK_MEDIA}
     networks:
       - firecrawl
-
+    restart: always
   api:
     <<: *common-service
     environment:
